@@ -1,6 +1,16 @@
 #! /usr/bin/env python
 
-"""2007-06-28 : lzirkel@cendev.com
+"""
+2012-10-04 : lzirkel@cendev.com
+
+Fixed an issue wherein the script began failing due to a poor assumption
+in the regular expression for the HTTP img element.  I was assuming that
+src came immediately after the img element name, with a single space in
+between.  At some point in June of 2012 this changed for the Post Secret
+feed and thus the script broke.  By changing the single space to ".+?"
+(a non greedy, one or more, any character match) it appears to be fixed.
+
+2007-06-28 : lzirkel@cendev.com
 
 I've modified this and cleaned a number of things up.  This thing now saves
 the files using the same name they are posted with, as well as saving them 
@@ -15,7 +25,7 @@ So the process that follows is:
   directory.
 """
 
-__revision__ = 0.1
+__version__ = "0.2"
 
 import os
 import re
@@ -28,7 +38,7 @@ import feedparser
 VERBOSE = False
 
 
-RE = re.compile(r'.*?<img src="(?P<url>.*?)"(?P<rest>.*)')
+RE = re.compile(r'.*?<img.+?src="(?P<url>.*?)"(?P<rest>.*)')
 URL = 'http://feeds.feedburner.com/Postsecret'
 
 feeds = feedparser.parse(URL)
