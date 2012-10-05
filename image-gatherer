@@ -20,17 +20,13 @@ class ImageGrabber(object):
         self.dest = dest
 
     def _set_path(self, path):
-        today = str(datetime.date.today())
-        self._path = path
-        if self._path is None:
-            self._path = today
-        else:
-            self._path = os.sep.join([self._path, today])
+        self._path = str(datetime.date.today())
+        if path is not None:
+            self._path = os.sep.join([path, self._path])
         try:
             os.makedirs(self._path)
         except OSError, e:
             self.logger.debug("Error making directory (%s)" % (self._path))
-
     def _get_path(self):
         return self._path
     dest = property(_get_path, _set_path)
