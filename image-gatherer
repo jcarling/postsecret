@@ -1,0 +1,151 @@
+#! /usr/bin/python
+
+"""
+"""
+
+__version__ = "0.3"
+
+import sys
+import os
+import datetime
+import logging
+import re
+import urllib2
+import feedparser
+
+
+class ImageGrabber(object):
+    def __init__(self, dest, logger=logging.getLogger(), *args, **kwargs):
+        self.logger = logger
+        self.dest = dest
+
+    def _set_path(self, path):
+        today = str(datetime.date.today())
+        self._path = path
+        if self._path is None:
+            self._path = today
+        else:
+            self._path = os.sep.join([self._path, today])
+        try:
+            os.makedirs(self._path)
+        except OSError, e:
+            self.logger.debug("Error making directory (%s)" % (self._path))
+
+    def _get_path(self):
+        return self._path
+    dest = property(_get_path, _set_path)
+
+    def fetch(self, url):
+        try:
+            imgfp = urllib2.urlopen(url)
+        except urllib2.HTTPError, e:
+            print e
+        img = imgfp.read()
+        imgfp.close()
+
+        return img
+
+    def save(self, filename, data):
+        image_path = os.sep.join([self.dest, filename])
+        try:
+            ofp = open(image_path, "wb")
+            ofp.write(data)
+            ofp.close()
+        except IOError, e:
+            self.logger.debug("Error writing image (%s)" % (image_path))
+
+
+    def grab(self, url):
+        filename = url.split(os.sep)[-1:][0]
+        self.save(filename, self.fetch(url))
+
+
+class ImageFeed(object):
+    def __init__(self, url, 
+                 regex=r'.*?<img.+?src="(?P<url>.*?)"(?P<remainder>.*)',
+                 logger=logging.getLogger(), *args, **kwargs):
+        self.url = url
+        self.regex = re.compile(regex)
+        self.logger = logger
+        self.urllist = None
+        self.index = None
+
+    def get_feed(self):
+        import feedparser
+
+        if self.urllist is None:
+            self.urllist = []
+            doc = feedparser.parse(self.url)
+            content = doc.entries[0].content[0].value
+
+            m = self.regex.match(content)
+            while m:
+                if m:
+                    url = m.group('url')
+                    content = m.group('remainder')
+
+                    self.logger.debug("URL from feed = %s" % (url))
+                    self.urllist.append(url)
+
+                m = self.regex.match(content)
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        self.get_feed()
+        if self.index is None:
+            self.index = 0
+        try:
+            item = self.urllist[self.index]
+            self.index += 1
+        except IndexError:
+            raise StopIteration
+        return item
+
+
+class GatherApp(object):
+    def __init__(self, logger=logging.getLogger(), *args, **kwargs):
+        self.logger = logger
+        self.process_command_line()
+
+    def process_command_line(self):
+        import optparse
+        parser = optparse.OptionParser()
+        parser.add_option("--logfile", dest="logfile", metavar="FILE",
+                          default=None, help="output logs to FILE")
+        parser.add_option("--feed-url", dest="feedurl", metavar="URL",
+                          default=None, help="URL to fetch feed from")
+        parser.add_option("--dest", dest="dest", metavar="DIR",
+                          default=None, help="destination DIR to store images")
+        (options, args) = parser.parse_args()
+
+        self.logfile = options.logfile
+        self.feedurl = options.feedurl
+        self.dest = options.dest
+
+        if self.logfile is not None:
+            logging.basicConfig(filename=self.logfile, level=logging.DEBUG)
+
+        if self.feedurl is None:
+            self.logger.debug("Cannot continue with no feed URL provided.")
+            print "Must provide feed URL"
+            sys.exit(1)
+        
+    def run(self):
+        self.logger.debug("Starting up...")
+
+        grabber = ImageGrabber(self.dest)
+
+        # fetch the page in question
+        for image_url in ImageFeed(self.feedurl):
+            self.logger.debug("Fetching %s" % (image_url))
+            grabber.grab(image_url)
+
+
+        self.logger.debug("Closing down...")
+
+
+if __name__ == '__main__':
+    app = GatherApp()
+    app.run()
